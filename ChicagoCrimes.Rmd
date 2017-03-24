@@ -1,0 +1,128 @@
+---
+title: "Chicago Crimes Kaggle Study"
+author: "Manuel Jose Mora Cordero"
+date: "15 de Marzo de 2016"
+output: html_document
+---
+
+
+
+### __Visualización y Analisis Preliminares__
+
+
+Vamos a cargar el set de datos de delitos cometidos en la ciudad de Chicago entre el 2012 y el 2017. En esta primara parte el objetivo es hacer un analisis preliminar de los datos contenidos en el fichero Chicago_Crimes_2012_to_2017.csv
+
+
+Cargamos la librerias de R que vamos a necesitar:
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(VIM)
+library(rpart)
+```
+
+Cargamos el fcihero csv como un Dataframe para que nos sea mas comodo su procesamineto y consulta:
+
+```{r}
+data <- read.csv("/Users/Manu/Documents/MasterDataScience/MineriaDatos/Practica/crimes-in-chicago/Chicago_Crimes_2012_to_2017.csv", sep=",")
+ChicagoCrimes <- data.frame(data, check.names = TRUE)
+```
+
+
+Obtenemos una muestra del 0.05 del conjunto total y seleccionamos los campos sobre los que queremos basar el analisis:
+```{r}
+ChicagoCrimes_test <- sample_frac(ChicagoCrimes, 0.005, replace = FALSE)
+ChicagoCrimes_test <- ChicagoCrimes_test %>% select(Date, Primary.Type,  Location.Description, District, Domestic, Arrest)
+```
+
+
+Creamos una nueva variabble que va a ser el mes en el que se comete crimen:
+
+```{r}
+ChicagoCrimes_test <- mutate(ChicagoCrimes_test, month = substr(Date,0,2))
+ChicagoCrimes_test <- ChicagoCrimes_test %>% select(month,Primary.Type,  Location.Description, District, Domestic, Arrest)
+```
+
+Comprobamos los datos faltantes con la libreria VIM
+
+```{r}
+aggr_plot <- aggr(ChicagoCrimes_test, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE,labels=names(ChicagoCrimes_test), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+
+Queremos intentar explicar si las variables
+
+* month = mes del delito
+* Primary.Type = tipo de delito
+* Location.Description = Tipo de localización del delito
+* Domestic = Si el delito ocurrio en el ambito domestico
+* District = codigo del distrito donde se registro el delito
+
+Pueden o no tener incidencia en la variable Arrest, indicador de si hubo arresto o no.
+
+Vamos a tratar de hacer una visualización de la relación entre el mes del delito y si variable arresto:
+
+```{r}
+ggplot(ChicagoCrimes_test, aes(x=ChicagoCrimes_test$Arrest))+geom_bar(aes(fill=ChicagoCrimes_test$Arrest))+facet_grid( .~ChicagoCrimes_test$month)
+```
+
+Vemos que hay mas "no arrestos" que arrestos independientemente del mes, y la proporcion entre "no arrestos" y arrestos se mantiene constante con independencia del mes.
+
+
+
+Vamos a tratar de hacer una visualización de la relación entre el tipo de delito y si variable arresto:
+
+```{r}
+arrestVtype <- table(ChicagoCrimes_test$Arrest, ChicagoCrimes_test$Primary.Type)
+plot(arrestVtype, col = c("blue","grey"), xlab="Arrest", ylab="Type")
+```
+
+Podemos observar a primera vista que dependiendo del tipo de delito se producen mas o menos arrestos.
+
+
+Vamos a tratar de hacer una visualización de la relación entre el tipo de localizacion y si variable arresto:
+
+```{r}
+arrestVlocation <- table(ChicagoCrimes_test$Arrest, ChicagoCrimes_test$Location.Description)
+plot(arrestVlocation, col = c("blue","grey"), xlab="Arrest", ylab="Location")
+```
+
+De igual manera se puede observar que dependiendo del tipo de localizacion el numero de arrestos varia.
+
+Analizamos ahora la relación delito domestico/arresto:
+
+```{r}
+arrestVdomestic <- table(ChicagoCrimes_test$Arrest, ChicagoCrimes_test$Domestic)
+plot(arrestVdomestic, col = c("blue","grey"), xlab="Arrest", ylab="Domestic")
+```
+
+La mayor parte de los delitos no son de ambito domestico, pero dentro de los domesticos, la mayoria parece no acabar en arresto
+
+Analizamos a hora la posible relación Arresto/Distrito:
+
+```{r}
+arrestVdistrito <- table(ChicagoCrimes_test$Arrest, ChicagoCrimes_test$District)
+plot(arrestVdistrito, col = c("blue","grey"), xlab="Arrest", ylab="Distrito")
+```
+
+Parece que hay distritos donde hay una mayor frecuencia de arrestos que en otros.
+
+
+
+Vamos a aplicar un modelo de predicción basado en arboles de decisión para predecir si un delito acaba en arresto o no en función de las variables month, Primary.Type, Location.Description, Domestic y District:
+
+```{r}
+ChicagoCrimes_test <- as.data.frame(ChicagoCrimes_test)
+
+
+# Entreno el modelo con los datos de train
+
+ChicagoCrimes_test.tree <- rpart(ChicagoCrimes_test[,6] ~., data=ChicagoCrimes_test[,1:5], cp=0.04, parms=list(split="information"))
+ChicagoCrimes_test.tree
+
+# lo pintamos
+plot(ChicagoCrimes_test.tree, uniform=T);
+text(ChicagoCrimes_test.tree, all=T, pretty=0, fancy=T, use.n=T, fwidth=0.3, fheight=0.3)
+```
+
